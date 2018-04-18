@@ -1,86 +1,83 @@
-#!/usr/bin/env node
-
-console.log('Creating tsconfig path mappings from systemjs..');
-
 const fs = require('fs');
 const path = require('path');
-const Builder = require('systemjs-builder');
 
-const tsConfigPath = path.join(process.cwd(), 'tsconfig.json');
-const pathMapPath = path.join(process.cwd(), 'pathmap.json');
-const tsConfig = require(tsConfigPath);
+module.exports = function(options) {
+  const log = function log(text, method) {
+    if (opts.silent) {
+      return;
+    }
+    method = !method ? 'log' : method;
+    console[method](`jspm-tsc-update: ${text}`);
+  };
 
-if (!fs.existsSync(pathMapPath)) {
-  fs.writeFileSync(pathMapPath, JSON.stringify({
-    packages: []
-  }, null, '\t'));
-}
+  const defaults = require('./defaults');
+  const opts = Object.assign({}, defaults, options);
 
-const pathMap = require(pathMapPath);
+  if (!fs.existsSync(opts.packagePath)) {
+    log(`Package path ${opts.packagePath} does not exist`, 'error');
+    return false;
+  }
 
-const builder = new Builder();
+  opts.packagePath = path.resolve(opts.packagePath);
+  log(`Using directory ${opts.packagePath}`)
 
-const paths = {};
-const merged = {};
+  if (!fs.existsSync(path.join(opts.packagePath, 'package.json'))) {
+    log(`package.json does not exist in ${opts.packagePath}`, 'error');
+    return false;
+  }
 
-builder.loadConfig('./system.config.js')
-  .then(mapPaths)
-  .then(mergePaths)
-  .then(writePaths)
-  .then(() => {
-    console.log('tsconfig.json has been updated.');
-    process.exit(0);
-  }).catch(reason => {
-    console.error(reason.message
-      ? reason.message
-      : reason);
-    process.exit(1);
-  });
+  const jspm = opts.jspm;
+  jspm.setPackagePath(opts.packagePath);
 
-function mapPaths() {
+  const tsConfigPath = path.join(opts.packagePath, opts.tsConfigPath);
+  const tsConfigOutPath = path.join(opts.packagePath, opts.tsConfigOutPath);
+
+  const tsConfigFile = path.join(tsConfigPath, `${opts.tsConfigName}.json`);
+  const tsConfigOutFile = path.join(tsConfigOutPath, `${opts.tsConfigOutName}.json`);
+
+  if (!fs.existsSync(tsConfigFile)) {
+    log(`${path.relative(opts.packagePath, tsConfigFile)} does not exist`, 'error');
+    return false;
+  }
+
+  if (!opts.noBackupWarning && opts.noBackupTsConfig && fs.existsSync(tsConfigOutFile)) {
+    log(`${path.relative(opts.packagePath, tsConfigOutFile)} already exists and will be replaced without a backup`, 'warn');
+  }
+
+  const tsConfig = require(tsConfigOutFile);
+  const builder = new(jspm.Builder)();
+
+  let paths = {};
   for (let map in builder.loader.map) {
     const normalized = builder.loader.normalizeSync(map);
     const relative = normalized.replace(builder.loader.baseURL, '');
     paths[map] = [relative]
     paths[`${map}/*`] = [`${relative}/*`, `${relative}/*/index`];
   }
-}
 
-function mergePaths() {
-  const deleted = [];
+  const pathsMap = Object.assign(tsConfig.compilerOptions.paths, paths);
+  const extendsPath = path.relative(tsConfigOutPath, tsConfigPath);
+  const extendsFile = (!extendsPath ? './' : extendsPath) + opts.tsConfigName;
+  const config = { extends: '', compilerOptions: {} };
 
-  for (let path of pathMap.packages) {
-    if (!builder.loader.map.hasOwnProperty(path)) {
-      deleted.push(path);
-      deleted.push(`${path}/*`);
+  if (!config.compilerOptions.baseUrl) {
+    config.compilerOptions.baseUrl = opts.baseUrl;
+  }
+
+  config.extends = extendsFile;
+  config.compilerOptions.paths = pathsMap;
+
+  if (!opts.noBackupTsConfig && fs.existsSync(tsConfigOutFile)) {
+    let name = path.join(tsConfigOutPath, `${opts.backupPrefix}${opts.tsConfigOutName}.json${opts.backupSuffix}`);
+    
+    if (opts.backupOverwrite || !fs.existsSync(name)) {
+      fs.writeFileSync(name, JSON.stringify(require(tsConfigOutFile), null, '\t'));
+      log(`${path.relative(opts.packagePath, name)} has been created`);
     }
   }
 
-  if (!tsConfig.compilerOptions) {
-    tsConfig.compilerOptions = {};
-  }
+  fs.writeFileSync(tsConfigOutFile, JSON.stringify(config, null, '\t'));
+  log(`${path.relative(opts.packagePath, tsConfigOutFile)} has been created`);
 
-  if (!tsConfig.compilerOptions.paths) {
-    tsConfig.compilerOptions.paths = {};
-  }
-  if (!tsConfig.compilerOptions.baseUrl) {
-    tsConfig.compilerOptions.baseUrl = '.';
-  }
-
-  for (let path in tsConfig.compilerOptions.paths) {
-    if (deleted.indexOf(path) === -1) {
-      merged[path] = tsConfig.compilerOptions.paths[path];
-    }
-  }
-
-  for (let path in paths) {
-    merged[path] = paths[path];
-  }
-}
-
-function writePaths() {
-  tsConfig.compilerOptions.paths = merged;
-  pathMap.packages = Object.keys(builder.loader.map).map(key => key);
-  fs.writeFileSync(tsConfigPath, JSON.stringify(tsConfig, null, '\t'));
-  fs.writeFileSync(pathMapPath, JSON.stringify(pathMap, null, '\t'))
+  return true;
 }
