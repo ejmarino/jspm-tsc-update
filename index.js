@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-module.exports = function(options) {
+module.exports = function (options) {
   const log = function log(text, method) {
     if (opts.silent) {
       return;
@@ -45,17 +45,19 @@ module.exports = function(options) {
   }
 
   const tsConfig = require(tsConfigOutFile);
-  const builder = new(jspm.Builder)();
+  const builder = new (jspm.Builder)();
 
   let paths = {};
   for (let map in builder.loader.map) {
     const normalized = builder.loader.normalizeSync(map);
-    const relative = normalized.replace(builder.loader.baseURL, '');
+    let relative = normalized.replace(builder.loader.baseURL, '');
     paths[map] = [relative]
     let pkg = null;
     try {
-      pkg = JSON.parse(fs.readFileSync(`${normalized}/package.json`, 'utf8'));
-    } catch (e) {}
+      let file = normalized.indexOf('file:///') == -1 ? normalized : normalized.substring(8);
+      file = file + '/package.json';
+      pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (e) { }
     if (!!pkg && !!pkg.directories && !!pkg.directories.lib) {
       relative = `${relative}/${pkg.directories.lib}`;
     }
@@ -76,7 +78,7 @@ module.exports = function(options) {
 
   if (!opts.noBackupTsConfig && fs.existsSync(tsConfigOutFile)) {
     let name = path.join(tsConfigOutPath, `${opts.backupPrefix}${opts.tsConfigOutName}.json${opts.backupSuffix}`);
-    
+
     if (opts.backupOverwrite || !fs.existsSync(name)) {
       fs.writeFileSync(name, JSON.stringify(require(tsConfigOutFile), null, '\t'));
       log(`${path.relative(opts.packagePath, name)} has been created`);
