@@ -51,15 +51,17 @@ module.exports = function (options) {
   for (let map in builder.loader.map) {
     const normalized = builder.loader.normalizeSync(map);
     let relative = normalized.replace(builder.loader.baseURL, '');
-    paths[map] = [relative]
-    let pkg = null;
-    try {
-      let file = normalized.indexOf('file:///') == -1 ? normalized : normalized.substring(8);
-      file = file + '/package.json';
-      pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
-    } catch (e) { }
-    if (!!pkg && !!pkg.directories && !!pkg.directories.lib) {
-      relative = `${relative}/${pkg.directories.lib}`;
+    paths[map] = [relative];
+    if (ignoreLibDirectory) {
+      let pkg = null;
+      try {
+        let file = normalized.indexOf('file:///') == -1 ? normalized : normalized.substring(8);
+        file = file + '/package.json';
+        pkg = JSON.parse(fs.readFileSync(file, 'utf8'));
+      } catch (e) { }
+      if (!!pkg && !!pkg.directories && !!pkg.directories.lib) {
+        relative = `${relative}/${pkg.directories.lib}`;
+      }
     }
     paths[`${map}/*`] = [`${relative}/*`, `${relative}/*/index`];
   }

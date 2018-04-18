@@ -7,6 +7,7 @@ module.exports = {
   tsConfigOutPath: './',
   jspm: require('jspm'),
   baseUrl: '.',
+  ignoreLibDirectory: true,
   noBackupTsConfig: false,
   noBackupWarning: false,
   backupOverwrite: false,
