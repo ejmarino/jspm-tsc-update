@@ -52,7 +52,7 @@ module.exports = function (options) {
     const normalized = builder.loader.normalizeSync(map);
     let relative = normalized.replace(builder.loader.baseURL, '');
     paths[map] = [relative];
-    if (ignoreLibDirectory) {
+    if (!opts.ignoreLibDirectory) {
       let pkg = null;
       try {
         let file = normalized.indexOf('file:///') == -1 ? normalized : normalized.substring(8);
