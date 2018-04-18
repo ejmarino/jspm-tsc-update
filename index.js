@@ -52,6 +52,13 @@ module.exports = function(options) {
     const normalized = builder.loader.normalizeSync(map);
     const relative = normalized.replace(builder.loader.baseURL, '');
     paths[map] = [relative]
+    let pkg = null;
+    try {
+      pkg = JSON.parse(fs.readFileSync(`${normalized}/package.json`, 'utf8'));
+    } catch (e) {}
+    if (!!pkg && !!pkg.directories && !!pkg.directories.lib) {
+      relative = `${relative}/${pkg.directories.lib}`;
+    }
     paths[`${map}/*`] = [`${relative}/*`, `${relative}/*/index`];
   }
 
